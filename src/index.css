@@ -1,0 +1,133 @@
+@import "tailwindcss";
+
+:root {
+  --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-header: #ffffff;
+  --border-color: #e2e8f0;
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-dim: #64748b;
+  --color-blue: #2563eb;
+  --color-emerald: #10b981;
+  --color-red: #ef4444;
+
+  --stat-pending-bg: #fef3c7;
+  --stat-pending-text: #92400e;
+  --stat-pending-badge-bg: #fde68a;
+  --stat-pending-badge-text: #78350f;
+
+  --stat-complete-bg: #d1fae5;
+  --stat-complete-text: #065f46;
+  --stat-complete-badge-bg: #a7f3d0;
+  --stat-complete-badge-text: #047857;
+
+  --stat-assets-bg: #e0f2fe;
+  --stat-assets-text: #075985;
+  --stat-assets-badge-bg: #bae6fd;
+  --stat-assets-badge-text: #0369a1;
+
+  --bg-card-blue: #f8fafc;
+  --btn-primary-bg: #1e3a8a;
+  --btn-primary-text: #ffffff;
+  --nav-active-bg: #eff6ff;
+  --nav-active-text: #1d4ed8;
+  --progress-fill: #10b981;
+  --badge-in-progress-bg: #fef3c7;
+  --badge-in-progress-text: #d97706;
+}
+
+/* Dark mode configurations */
+.dark-mode, .dark {
+  --bg-gradient: linear-gradient(135deg, #090d16 0%, #0e1320 100%);
+  --bg-primary: #090d16;
+  --bg-secondary: #131a26;
+  --bg-header: #131a26;
+  --border-color: #1e293b;
+  --text-primary: #f8fafc;
+  --text-secondary: #cbd5e1;
+  --text-dim: #94a3b8;
+  --color-blue: #3b82f6;
+  --color-emerald: #34d399;
+  --color-red: #f87171;
+
+  --stat-pending-bg: #2d2013;
+  --stat-pending-text: #fcd34d;
+  --stat-pending-badge-bg: #452c1e;
+  --stat-pending-badge-text: #fbbf24;
+
+  --stat-complete-bg: #062e24;
+  --stat-complete-text: #34d399;
+  --stat-complete-badge-bg: #064e3b;
+  --stat-complete-badge-text: #6ee7b7;
+
+  --stat-assets-bg: #07354c;
+  --stat-assets-text: #38bdf8;
+  --stat-assets-badge-bg: #082f49;
+  --stat-assets-badge-text: #7dd3fc;
+
+  --bg-card-blue: #172030;
+  --btn-primary-bg: #2563eb;
+  --btn-primary-text: #ffffff;
+  --nav-active-bg: #1e293b;
+  --nav-active-text: #3b82f6;
+  --progress-fill: #34d399;
+  --badge-in-progress-bg: #2d2013;
+  --badge-in-progress-text: #fbbf24;
+}
+
+@keyframes laser {
+  0% { top: 0%; opacity: 0.8; }
+  50% { top: 100%; opacity: 0.8; }
+  100% { top: 0%; opacity: 0.8; }
+}
+
+.animate-scanner-laser {
+  animation: laser 3s infinite linear;
+  position: absolute;
+}
+
+.card-elevated {
+  background-color: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: 1rem;
+  padding: 1rem;
+  transition: all 0.2s ease-in-out;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 9999px;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+@media print {
+  body {
+    background-color: white !important;
+    color: black !important;
+  }
+  header, nav, button {
+    display: none !important;
+  }
+  #printable-tag, #printable-document {
+    box-shadow: none !important;
+    border: 1px solid #000 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+}

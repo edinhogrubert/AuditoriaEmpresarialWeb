@@ -1,0 +1,10 @@
+{
+  "name": "Auditoria de Patrimônio",
+  "description": "Sistema completo de auditoria patrimonial, inventário físico, conferência de bens com leitor de código, emissão de laudos e análise inteligente via IA.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
