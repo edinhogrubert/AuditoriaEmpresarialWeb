@@ -57,7 +57,6 @@ import {
 } from 'lucide-react';
 
 import { syncToCloud, downloadFromCloud, logChangelogToFirebase } from './services/firebase';
-import firebaseConfig from '../firebase-applet-config.json';
 
 import {
   BarChart as RechartsBarChart,
@@ -1742,7 +1741,7 @@ export function App() {
                       <div className="grid grid-cols-2 gap-3 text-xs bg-white dark:bg-slate-900/40 p-3 rounded-lg border border-slate-150 dark:border-slate-800 font-mono">
                         <div>
                           <span className="text-slate-400 block text-[9px] uppercase tracking-wider font-sans font-bold">Projeto ID</span>
-                          <span className="text-slate-750 dark:text-slate-300">{firebaseConfig.projectId || 'auditoria0'}</span>
+                          <span className="text-slate-750 dark:text-slate-300">auditoria0</span>
                         </div>
                         <div>
                           <span className="text-slate-400 block text-[9px] uppercase tracking-wider font-sans font-bold">Último Sync</span>
