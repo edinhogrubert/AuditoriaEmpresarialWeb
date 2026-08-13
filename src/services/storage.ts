@@ -138,6 +138,12 @@ export const clearScanItemsForBatch = (batchId: number) => {
   saveExpectedItems(updatedExpected);
 };
 
+// Helper to format batch name with creator info according to system specifications
+export const getFormattedBatchName = (batch: Batch): string => {
+  const creator = batch.createdBy || 'ADM_WEB';
+  return `${batch.name} (Criado por: ${creator})`;
+};
+
 // Seed initial demo data for demonstration
 const SEED_BATCHES: Batch[] = [
   {
@@ -146,6 +152,9 @@ const SEED_BATCHES: Batch[] = [
     description: 'Coleta de ativos e periféricos',
     type: 'COLLECTION',
     timestamp: Date.now() - 86400000 * 3,
+    createdBy: 'ADM_WEB',
+    lastUploadedBy: 'ADM_WEB',
+    updatedAt: Date.now() - 86400000 * 3,
   },
   {
     id: 2,
@@ -153,6 +162,9 @@ const SEED_BATCHES: Batch[] = [
     description: 'Auditoria de bens do setor administrativo',
     type: 'VERIFICATION',
     timestamp: Date.now() - 86400000 * 1,
+    createdBy: 'ADM_WEB',
+    lastUploadedBy: 'ADM_WEB',
+    updatedAt: Date.now() - 86400000 * 1,
   },
 ];
 
@@ -312,15 +324,20 @@ export const createBatch = (
   name: string,
   description: string = '',
   type: BatchType = 'COLLECTION',
-  expectedList: { barcode: string; description?: string; category?: string }[] = []
+  expectedList: { barcode: string; description?: string; category?: string }[] = [],
+  createdBy: string = 'ADM_WEB'
 ): Batch => {
   const batches = getStoredBatches();
+  const now = Date.now();
   const newBatch: Batch = {
-    id: Date.now(),
+    id: now,
     name: name.trim(),
     description: description.trim(),
     type,
-    timestamp: Date.now(),
+    timestamp: now,
+    createdBy: createdBy || 'ADM_WEB',
+    lastUploadedBy: createdBy || 'ADM_WEB',
+    updatedAt: now,
   };
   saveBatches([newBatch, ...batches]);
 

@@ -8,7 +8,23 @@ export interface Batch {
   timestamp: number;
   isClosed?: boolean;
   closedReason?: string;
-  closedAt?: number;
+  closedAt?: number | null;
+  createdBy?: string;       // Identificador do criador ("pedro_1", "tiago_1", "ADM_WEB")
+  lastUploadedBy?: string;  // Tag do último aparelho que enviou dados
+  updatedAt?: number;       // Timestamp da última alteração
+}
+
+export interface DeviceCounter {
+  cleanPrefix: string;
+  count: number;
+  updatedAt: number;
+}
+
+export interface RegisteredDevice {
+  deviceTag: string;
+  baseName: string;
+  sequence: number;
+  registeredAt: number;
 }
 
 export interface ScanItem {

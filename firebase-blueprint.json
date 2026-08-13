@@ -1,7 +1,21 @@
 {
   "name": "Auditoria de Patrimônio",
-  "description": "Banco de dados Firestore para sincronização em nuvem de lotes, itens esperados, itens escaneados e logs de auditoria física patrimonial.",
+  "description": "Banco de dados Firestore para sincronização em nuvem de lotes, itens esperados, itens escaneados, contadores de dispositivo e logs de auditoria patrimonial.",
   "collections": {
+    "device_counters": {
+      "fields": {
+        "count": "number",
+        "updatedAt": "number"
+      }
+    },
+    "registered_devices": {
+      "fields": {
+        "deviceTag": "string",
+        "baseName": "string",
+        "sequence": "number",
+        "registeredAt": "number"
+      }
+    },
     "batches": {
       "fields": {
         "id": "number",
@@ -12,6 +26,9 @@
         "isClosed": "boolean",
         "closedReason": "string",
         "closedAt": "number",
+        "createdBy": "string",
+        "lastUploadedBy": "string",
+        "updatedAt": "number",
         "ownerUid": "string"
       },
       "subcollections": {

@@ -15,6 +15,7 @@ import {
   getAuditStatsForBatch,
   formatDateStr,
   getAllAssetRecords,
+  getFormattedBatchName,
 } from '../services/storage';
 
 interface MainScreenProps {
@@ -226,7 +227,7 @@ export const MainScreen: React.FC<MainScreenProps> = ({ onNavigate, onOpenBatchD
                 >
                   <div className="flex justify-between items-start">
                     <div className="min-w-0 flex-1 pr-2">
-                      <h3 className="text-sm font-bold text-[var(--text-primary)] truncate">{batch.name}</h3>
+                      <h3 className="text-sm font-bold text-[var(--text-primary)] truncate">{getFormattedBatchName(batch as any)}</h3>
                       <span className="text-[11px] text-[var(--text-dim)] font-medium mt-0.5 block">{formatDateStr(batch.timestamp)}</span>
                     </div>
                     <span

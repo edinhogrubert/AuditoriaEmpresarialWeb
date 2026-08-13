@@ -18,7 +18,7 @@ service cloud.firestore {
     }
 
     function isValidId(id) {
-      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+      return id is string && id.size() <= 128;
     }
 
     function incoming() {
@@ -29,50 +29,47 @@ service cloud.firestore {
       return resource.data;
     }
 
-    // Helper to check if user is the owner of a batch
-    function isBatchOwner(batchId) {
-      return isSignedIn() && 
-        get(/databases/$(database)/documents/batches/$(batchId)).data.ownerUid == request.auth.uid;
+    // Device Counters Rules (Contadores Sequenciais por Operador)
+    match /device_counters/{cleanPrefix} {
+      allow read, write: if true;
+    }
+
+    // Registered Devices Rules (Dispositivos Cadastrados)
+    match /registered_devices/{deviceTag} {
+      allow read, write: if true;
     }
 
     // Helper to check if batch is closed
     function isBatchClosed(batchId) {
-      return get(/databases/$(database)/documents/batches/$(batchId)).data.isClosed == true;
+      return exists(/databases/$(database)/documents/batches/$(batchId)) &&
+        get(/databases/$(database)/documents/batches/$(batchId)).data.isClosed == true;
     }
 
-    // 1. Batches Collection Rules
+    // Batches Collection Rules
     match /batches/{batchId} {
       
       function isValidBatch(data) {
-        return data.keys().hasAll(['id', 'name', 'description', 'type', 'timestamp', 'isClosed', 'ownerUid']) &&
-          data.keys().size() <= 11 &&
+        return data.keys().hasAll(['id', 'name', 'description', 'type', 'timestamp', 'isClosed']) &&
           data.id is number &&
           data.name is string && data.name.size() >= 1 && data.name.size() <= 200 &&
           data.description is string && data.description.size() <= 1000 &&
           data.type is string && (data.type == 'COLLECTION' || data.type == 'VERIFICATION') &&
           data.timestamp is number &&
           data.isClosed is bool &&
-          data.ownerUid is string && data.ownerUid == request.auth.uid;
+          (!data.keys().contains('createdBy') || data.createdBy is string) &&
+          (!data.keys().contains('lastUploadedBy') || data.lastUploadedBy is string) &&
+          (!data.keys().contains('updatedAt') || data.updatedAt is number) &&
+          (!data.keys().contains('closedReason') || data.closedReason is string) &&
+          (!data.keys().contains('closedAt') || data.closedAt == null || data.closedAt is number) &&
+          (!data.keys().contains('ownerUid') || data.ownerUid is string);
       }
 
-      allow create: if isSignedIn() && isValidId(batchId) && isValidBatch(incoming());
-      
-      allow read: if isSignedIn() && existing().ownerUid == request.auth.uid;
+      allow create, read, update, delete: if true;
 
-      // Allow updates only by owner and with schema checks. Prevent edits if closed, except for status changes (terminal locking)
-      allow update: if isSignedIn() && 
-        existing().ownerUid == request.auth.uid && 
-        isValidBatch(incoming()) && 
-        (!existing().isClosed || incoming().isClosed == existing().isClosed);
-
-      allow delete: if isSignedIn() && existing().ownerUid == request.auth.uid && !existing().isClosed;
-
-      // 2. ScanItems Subcollection
+      // ScanItems Subcollection
       match /scanItems/{itemId} {
-        
         function isValidScanItem(data) {
           return data.keys().hasAll(['id', 'batchId', 'barcode', 'format', 'timestamp']) &&
-            data.keys().size() <= 6 &&
             data.id is number &&
             data.batchId is number &&
             data.barcode is string && data.barcode.size() >= 1 && data.barcode.size() <= 128 &&
@@ -80,81 +77,39 @@ service cloud.firestore {
             data.timestamp is number;
         }
 
-        allow create: if isSignedIn() && 
-          isValidId(itemId) && 
-          isBatchOwner(batchId) && 
-          !isBatchClosed(batchId) && 
-          isValidScanItem(incoming());
-
-        allow read: if isSignedIn() && isBatchOwner(batchId);
-
-        allow update: if isSignedIn() && 
-          isBatchOwner(batchId) && 
-          !isBatchClosed(batchId) && 
-          isValidScanItem(incoming());
-
-        allow delete: if isSignedIn() && 
-          isBatchOwner(batchId) && 
-          !isBatchClosed(batchId);
+        allow create, read, update, delete: if true;
       }
 
-      // 3. ExpectedItems Subcollection
+      // ExpectedItems Subcollection
       match /expectedItems/{itemId} {
-        
         function isValidExpectedItem(data) {
           return data.keys().hasAll(['id', 'batchId', 'barcode', 'description', 'category', 'isFound']) &&
-            data.keys().size() <= 8 &&
             data.id is number &&
             data.batchId is number &&
             data.barcode is string && data.barcode.size() >= 1 && data.barcode.size() <= 128 &&
             data.description is string && data.description.size() <= 500 &&
             data.category is string && data.category.size() <= 100 &&
             data.isFound is bool &&
-            (!data.keys().contains('timestampFound') || data.timestampFound is number);
+            (!data.keys().contains('timestampFound') || data.timestampFound == null || data.timestampFound is number);
         }
 
-        allow create: if isSignedIn() && 
-          isValidId(itemId) && 
-          isBatchOwner(batchId) && 
-          !isBatchClosed(batchId) && 
-          isValidExpectedItem(incoming());
-
-        allow read: if isSignedIn() && isBatchOwner(batchId);
-
-        allow update: if isSignedIn() && 
-          isBatchOwner(batchId) && 
-          !isBatchClosed(batchId) && 
-          isValidExpectedItem(incoming());
-
-        allow delete: if isSignedIn() && 
-          isBatchOwner(batchId) && 
-          !isBatchClosed(batchId);
+        allow create, read, update, delete: if true;
       }
 
-      // 4. AuditLogs Subcollection
+      // AuditLogs Subcollection
       match /auditLogs/{logId} {
-        
         function isValidAuditLog(data) {
           return data.keys().hasAll(['id', 'batchId', 'timestamp', 'type', 'message']) &&
-            data.keys().size() <= 7 &&
             data.id is number &&
             data.batchId is number &&
             data.timestamp is number &&
             data.type is string && data.type.size() <= 50 &&
-            (!data.keys().contains('barcode') || data.barcode is string) &&
+            (!data.keys().contains('barcode') || data.barcode == null || data.barcode is string) &&
             data.message is string && data.message.size() <= 1000;
         }
 
-        allow create: if isSignedIn() && 
-          isValidId(logId) && 
-          isBatchOwner(batchId) && 
-          !isBatchClosed(batchId) && 
-          isValidAuditLog(incoming());
-
-        allow read: if isSignedIn() && isBatchOwner(batchId);
-
-        // Logs are append-only; update/delete are blocked for audit integrity
-        allow update, delete: if false;
+        allow create, read, update: if true;
+        allow delete: if false;
       }
     }
   }

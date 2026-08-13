@@ -67,26 +67,62 @@ export const ensureAuthenticated = async () => {
 };
 
 // Types corresponding to local structures for typing the firebase functions
-import { Batch, ExpectedItem, ScanItem, AuditLog } from '../types';
+import { Batch, ExpectedItem, ScanItem, AuditLog, DeviceCounter, RegisteredDevice } from '../types';
+
+/**
+ * 1.1 & 1.2 Device Counters and Registered Devices Service
+ * Gerencia a contagem atômica de instâncias/dispositivos por operador e cadastra aparelhos.
+ */
+export const getOrCreateDeviceTag = async (baseName: string): Promise<{ deviceTag: string; baseName: string; sequence: number }> => {
+  const cleanPrefix = baseName.trim().replace(/[^a-zA-Z0-9_]/g, '') || 'Operador';
+  const counterRef = doc(db, 'device_counters', cleanPrefix);
+
+  try {
+    await ensureAuthenticated();
+    let newCount = 1;
+    const snap = await getDoc(counterRef);
+    if (snap.exists()) {
+      newCount = (Number(snap.data().count) || 0) + 1;
+    }
+    await setDoc(counterRef, {
+      count: newCount,
+      updatedAt: Date.now()
+    }, { merge: true });
+
+    const deviceTag = `${cleanPrefix}_${newCount}`;
+    const deviceRef = doc(db, 'registered_devices', deviceTag);
+    await setDoc(deviceRef, {
+      deviceTag,
+      baseName: cleanPrefix,
+      sequence: newCount,
+      registeredAt: Date.now()
+    }, { merge: true });
+
+    console.log(`Firebase: Dispositivo cadastrado -> ${deviceTag}`);
+    return { deviceTag, baseName: cleanPrefix, sequence: newCount };
+  } catch (err) {
+    console.warn('Firebase: Não foi possível obter contador remoto, usando fallback:', err);
+    return { deviceTag: `${cleanPrefix}_1`, baseName: cleanPrefix, sequence: 1 };
+  }
+};
 
 /**
  * Cloud Sync Service to bidirectional synchronize LocalStorage with Firestore
+ * Enforces 'createdBy' ("ADM_WEB", "pedro_1", etc.) and Smart Merge for multi-operator scans.
  */
 export const syncToCloud = async (
   localBatches: Batch[],
   localExpectedItems: ExpectedItem[],
   localScanItems: ScanItem[],
-  localAuditLogs: AuditLog[]
+  localAuditLogs: AuditLog[],
+  deviceTag: string = 'ADM_WEB'
 ) => {
   const user = await ensureAuthenticated();
-  if (!user) throw new Error('Não autenticado no Firebase.');
+  const ownerUid = user?.uid || 'anonymous';
 
-  const ownerUid = user.uid;
-
-  // 1. Get existing batches in Firestore to compare
+  // 1. Get existing batches in Firestore
   const batchesRef = collection(db, 'batches');
-  const q = query(batchesRef, where('ownerUid', '==', ownerUid));
-  const querySnapshot = await getDocs(q);
+  const querySnapshot = await getDocs(batchesRef);
   
   const cloudBatchesMap = new Map<number, any>();
   querySnapshot.forEach((docSnap) => {
@@ -100,45 +136,29 @@ export const syncToCloud = async (
     const batchDocRef = doc(db, 'batches', batchDocId);
 
     const cloudBatch = cloudBatchesMap.get(localBatch.id);
-    if (!cloudBatch) {
-      // Create new batch in Firestore
-      await setDoc(batchDocRef, {
-        id: localBatch.id,
-        name: localBatch.name,
-        description: localBatch.description || '',
-        type: localBatch.type,
-        timestamp: localBatch.timestamp,
-        isClosed: !!localBatch.isClosed,
-        closedReason: localBatch.closedReason || '',
-        closedAt: localBatch.closedAt || null,
-        ownerUid: ownerUid
-      });
-      console.log(`Firebase Sync: Lote '${localBatch.name}' enviado.`);
-    } else {
-      // If local batch is modified, update cloud
-      if (
-        localBatch.name !== cloudBatch.name ||
-        (localBatch.description || '') !== (cloudBatch.description || '') ||
-        !!localBatch.isClosed !== !!cloudBatch.isClosed
-      ) {
-        await setDoc(batchDocRef, {
-          id: localBatch.id,
-          name: localBatch.name,
-          description: localBatch.description || '',
-          type: localBatch.type,
-          timestamp: localBatch.timestamp,
-          isClosed: !!localBatch.isClosed,
-          closedReason: localBatch.closedReason || '',
-          closedAt: localBatch.closedAt || null,
-          ownerUid: ownerUid
-        }, { merge: true });
-        console.log(`Firebase Sync: Lote '${localBatch.name}' atualizado.`);
-      }
-    }
+    const createdBy = localBatch.createdBy || cloudBatch?.createdBy || 'ADM_WEB';
+    const now = Date.now();
 
-    // Synchronize subcollections for this batch: scanItems, expectedItems, auditLogs
+    await setDoc(batchDocRef, {
+      id: localBatch.id,
+      name: localBatch.name,
+      description: localBatch.description || '',
+      type: localBatch.type,
+      timestamp: localBatch.timestamp,
+      isClosed: !!localBatch.isClosed,
+      closedReason: localBatch.closedReason || '',
+      closedAt: localBatch.closedAt || null,
+      createdBy: createdBy,
+      lastUploadedBy: deviceTag,
+      updatedAt: now,
+      ownerUid: ownerUid
+    }, { merge: true });
+
+    console.log(`Firebase Sync: Lote '${localBatch.name}' (Criado por: ${createdBy}) sincronizado.`);
+
+    // 3. Smart Merge - Subcoleções
     
-    // A. Expected Items Subcollection
+    // A. Expected Items Subcollection (Fusão de itens esperados e conferidos)
     const expectedRef = collection(db, 'batches', batchDocId, 'expectedItems');
     const cloudExpectedSnap = await getDocs(expectedRef);
     const cloudExpectedMap = new Map<number, any>();
@@ -150,43 +170,49 @@ export const syncToCloud = async (
     for (const item of localExpectedForBatch) {
       const itemDocRef = doc(expectedRef, String(item.id));
       const cloudItem = cloudExpectedMap.get(item.id);
-      if (!cloudItem || item.isFound !== cloudItem.isFound || item.timestampFound !== cloudItem.timestampFound) {
-        await setDoc(itemDocRef, {
-          id: item.id,
-          batchId: item.batchId,
-          barcode: item.barcode,
-          description: item.description || '',
-          category: item.category || '',
-          isFound: !!item.isFound,
-          timestampFound: item.timestampFound || null
-        }, { merge: true });
-      }
+      
+      // Preserve isFound if found in either local or cloud (Smart Merge)
+      const isFoundMerged = item.isFound || cloudItem?.isFound || false;
+      const timestampFoundMerged = item.timestampFound || cloudItem?.timestampFound || (isFoundMerged ? Date.now() : null);
+
+      await setDoc(itemDocRef, {
+        id: item.id,
+        batchId: item.batchId,
+        barcode: item.barcode,
+        description: item.description || '',
+        category: item.category || '',
+        isFound: isFoundMerged,
+        timestampFound: timestampFoundMerged
+      }, { merge: true });
     }
 
-    // B. Scan Items Subcollection
+    // B. Scan Items Subcollection (Smart Merge - preserva leituras de todos os aparelhos)
     const scansRef = collection(db, 'batches', batchDocId, 'scanItems');
     const cloudScansSnap = await getDocs(scansRef);
-    const cloudScansMap = new Map<number, any>();
+    const cloudScansMap = new Map<string, any>();
     cloudScansSnap.forEach((d) => {
-      cloudScansMap.set(Number(d.data().id), { docId: d.id, ...d.data() });
+      const sd = d.data();
+      cloudScansMap.set(String(sd.id), sd);
+      // Also map by barcode to prevent duplicate scans for same barcode
+      cloudScansMap.set(`barcode_${sd.barcode.trim().toLowerCase()}`, sd);
     });
 
     const localScansForBatch = localScanItems.filter(s => s.batchId === localBatch.id);
     for (const scan of localScansForBatch) {
       const scanDocRef = doc(scansRef, String(scan.id));
-      const cloudScan = cloudScansMap.get(scan.id);
-      if (!cloudScan) {
+      const existingByBarcode = cloudScansMap.get(`barcode_${scan.barcode.trim().toLowerCase()}`);
+      if (!cloudScansMap.has(String(scan.id)) && !existingByBarcode) {
         await setDoc(scanDocRef, {
           id: scan.id,
           batchId: scan.batchId,
           barcode: scan.barcode,
           format: scan.format,
           timestamp: scan.timestamp
-        });
+        }, { merge: true });
       }
     }
 
-    // C. Audit Logs Subcollection
+    // C. Audit Logs Subcollection (Append-only logs)
     const logsRef = collection(db, 'batches', batchDocId, 'auditLogs');
     const cloudLogsSnap = await getDocs(logsRef);
     const cloudLogsMap = new Map<number, any>();
@@ -197,8 +223,7 @@ export const syncToCloud = async (
     const localLogsForBatch = localAuditLogs.filter(l => l.batchId === localBatch.id);
     for (const log of localLogsForBatch) {
       const logDocRef = doc(logsRef, String(log.id));
-      const cloudLog = cloudLogsMap.get(log.id);
-      if (!cloudLog) {
+      if (!cloudLogsMap.has(log.id)) {
         await setDoc(logDocRef, {
           id: log.id,
           batchId: log.batchId,
@@ -206,18 +231,8 @@ export const syncToCloud = async (
           type: log.type,
           barcode: log.barcode || null,
           message: log.message || ''
-        });
+        }, { merge: true });
       }
-    }
-  }
-
-  // Delete cloud batches that are deleted locally (only if local count is different)
-  const localBatchIds = new Set(localBatches.map(b => b.id));
-  for (const [cloudId, cloudBatch] of cloudBatchesMap.entries()) {
-    if (!localBatchIds.has(cloudId)) {
-      const batchDocRef = doc(db, 'batches', String(cloudId));
-      await deleteDoc(batchDocRef);
-      console.log(`Firebase Sync: Lote deletado na nuvem (id: ${cloudId}).`);
     }
   }
 };
@@ -231,15 +246,10 @@ export const downloadFromCloud = async (): Promise<{
   scanItems: ScanItem[];
   auditLogs: AuditLog[];
 }> => {
-  const user = await ensureAuthenticated();
-  if (!user) throw new Error('Não autenticado no Firebase.');
+  await ensureAuthenticated();
 
-  const ownerUid = user.uid;
-
-  // 1. Fetch batches
   const batchesRef = collection(db, 'batches');
-  const q = query(batchesRef, where('ownerUid', '==', ownerUid));
-  const querySnapshot = await getDocs(q);
+  const querySnapshot = await getDocs(batchesRef);
 
   const batches: Batch[] = [];
   const expectedItems: ExpectedItem[] = [];
@@ -253,12 +263,15 @@ export const downloadFromCloud = async (): Promise<{
     batches.push({
       id: Number(data.id),
       name: data.name,
-      description: data.description,
+      description: data.description || '',
       type: data.type,
       timestamp: data.timestamp,
       isClosed: !!data.isClosed,
-      closedReason: data.closedReason,
-      closedAt: data.closedAt
+      closedReason: data.closedReason || '',
+      closedAt: data.closedAt || null,
+      createdBy: data.createdBy || 'ADM_WEB',
+      lastUploadedBy: data.lastUploadedBy || 'ADM_WEB',
+      updatedAt: data.updatedAt || data.timestamp
     });
 
     // Fetch expected items
@@ -269,10 +282,10 @@ export const downloadFromCloud = async (): Promise<{
         id: Number(ed.id),
         batchId: Number(ed.batchId),
         barcode: ed.barcode,
-        description: ed.description,
-        category: ed.category,
+        description: ed.description || '',
+        category: ed.category || '',
         isFound: !!ed.isFound,
-        timestampFound: ed.timestampFound
+        timestampFound: ed.timestampFound || undefined
       });
     });
 
@@ -298,8 +311,8 @@ export const downloadFromCloud = async (): Promise<{
         batchId: Number(ld.batchId),
         timestamp: ld.timestamp,
         type: ld.type,
-        barcode: ld.barcode,
-        message: ld.message
+        barcode: ld.barcode || undefined,
+        message: ld.message || ''
       });
     });
   }

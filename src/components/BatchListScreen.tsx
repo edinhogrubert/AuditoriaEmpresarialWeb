@@ -10,7 +10,7 @@ import {
   FileUp,
 } from 'lucide-react';
 import { Batch } from '../types';
-import { formatDateStr, getScanCountForBatch, getAuditStatsForBatch } from '../services/storage';
+import { formatDateStr, getScanCountForBatch, getAuditStatsForBatch, getFormattedBatchName } from '../services/storage';
 
 interface BatchListScreenProps {
   batches: Batch[];
@@ -172,8 +172,15 @@ export const BatchListScreen: React.FC<BatchListScreenProps> = ({
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <h3 className="text-sm font-black text-[var(--text-primary)] truncate uppercase tracking-tight">{batch.name}</h3>
+                      <div className="flex flex-col gap-0.5 mb-1">
+                        <h3 className="text-sm font-black text-[var(--text-primary)] truncate tracking-tight">
+                          {getFormattedBatchName(batch)}
+                        </h3>
+                        {batch.lastUploadedBy && (
+                          <span className="text-[10px] text-[var(--text-dim)] font-mono font-medium">
+                            Último envio: {batch.lastUploadedBy}
+                          </span>
+                        )}
                       </div>
                       <p className="text-[10px] text-[var(--text-secondary)] font-bold font-mono-code uppercase tracking-tighter">
                         {isVerification && stats
